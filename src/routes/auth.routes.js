@@ -67,7 +67,14 @@ router.post("/register", authController.register);
  *       200:
  *         description: Login successful
  */
-router.post("/login", authController.login);
+const rateLimit = require("express-rate-limit");
+
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10, // 10 attempts per 5 minutes
+  message: "Too many login attempts, try again later"
+});
+router.post("/login", loginLimiter, authController.login);
 
 /**
  * @swagger

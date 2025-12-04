@@ -67,35 +67,50 @@ exports.login = async (req, res) => {
 };
 
 exports.refresh = async (req, res) => {
-    try {
-        const { refreshToken } = req.body;
+  try {
+    const { refreshToken } = req.body;
 
-        if (!refreshToken)
-            return res.status(401).json({ message: "No refresh token provided" });
-
-        const user = await User.findOne({ refreshToken });
-        if (!user)
-            return res.status(403).json({ message: "Invalid refresh token" });
-
-        jwt.verify(
-            refreshToken,
-            process.env.JWT_REFRESH_SECRET,
-            (err, decoded) => {
-                if (err) return res.status(403).json({ message: "Invalid token" });
-
-                const accessToken = jwt.sign(
-                    { id: decoded.id, role: user.role },
-                    process.env.JWT_SECRET,
-                    { expiresIn: "15m" }
-                );
-
-                res.json({ accessToken });
-            }
-        );
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+    // 1. Check if refreshToken is provided
+    if (!refreshToken) {
+      return res.status(401).json({ message: "No refresh token provided" });
     }
+
+    // 2. Validate refresh token exists in DB
+    const user = await User.findOne({ refreshToken });
+    if (!user) {
+      return res.status(403).json({ message: "Invalid refresh token" });
+    }
+
+    // 3. Verify refresh token cryptographically
+    jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET,
+      async (err, decoded) => {
+        if (err) {
+          // Token is invalid or expired → invalidate it
+          await User.findByIdAndUpdate(user._id, { refreshToken: null });
+          return res.status(403).json({ message: "Invalid or expired token" });
+        }
+
+        // 4. ROTATE REFRESH TOKEN (important security measure)
+        const newRefreshToken = generateRefreshToken(user);
+
+        user.refreshToken = newRefreshToken;
+        await user.save();
+
+        // 5. Generate new ACCESS TOKEN
+        const accessToken = generateAccessToken(user);
+
+        // 6. Return both tokens
+        res.json({
+          accessToken,
+          refreshToken: newRefreshToken
+        });
+      }
+    );
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 exports.logout = async (req, res) => {

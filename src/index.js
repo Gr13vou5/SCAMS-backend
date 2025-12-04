@@ -3,6 +3,7 @@ const dotenv = require('dotenv');
 const { default: mongoose } = require('mongoose');
 const authRoutes = require("./routes/auth.routes");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
+const helmet = require("helmet");
 dotenv.config();
 
 const app = express();
@@ -16,6 +17,7 @@ app.use((err, req, res, next) => {
 app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use(helmet());
 
 mongoose.connect(`${process.env.MONGO_DB}`).then(() => {
     console.log('Connected to MongoDB');
